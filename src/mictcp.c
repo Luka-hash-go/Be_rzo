@@ -88,9 +88,9 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     
     // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
     socketTab[socketID].remote_addr = addr;
-    socketTab[socketID].state = CONNECTED;
+    socketTab[socketID].state = ESTABLISHED;
 
-    if (socket.remote_addr.ip_addr.addr_size == 0) {
+    if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
 
