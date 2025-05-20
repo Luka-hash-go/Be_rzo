@@ -66,6 +66,34 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
+    /*mic_tcp_pdu pduAccept;
+
+    pduAccept.header.source_port = port;
+    pduAccept.header.dest_port = port;
+
+    printf("<- Syn\n");
+    printf("Local : %s, Dest : %s \n", socketTab[socketID].local_addr.ip_addr.addr, NULL);
+    int result = IP_recv(&pduAccept, &socketTab[socketID].local_addr.ip_addr, &addr->ip_addr, 1000);
+
+    if (result < 0 || pduAccept.header.syn == '0') {
+        fprintf(stderr, "Syn non recu");
+    }
+
+
+    pduAccept.header.syn = '1';
+    pduAccept.header.ack = '1';
+    printf("-> SynAck");
+    IP_send(pduAccept, addr->ip_addr);
+    printf("<- Ack");
+    result = IP_recv(&pduAccept, &socketTab[socketID].local_addr.ip_addr, &addr->ip_addr, 1000);
+
+    if (result < 0 || pduAccept.header.ack == '0') {
+        fprintf(stderr, "Ack non recu");
+    }*/
+
+    printf("Receive connect\n");
+    socketTab[socketID].state = CONNECTED;
+
     // mic_tcp_sock socket = socketTab[socketID];
 
     // // on a pas reellement de phase de connection
@@ -85,18 +113,15 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
  */
 int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
-    
+
     // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
     socketTab[socketID].remote_addr = addr;
-    socketTab[socketID].state = ESTABLISHED;
+    socketTab[socketID].state = CONNECTED;
+
 
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
-
-    //memcpy(addr.ip_addr.addr,socket.remote_addr.ip_addr.addr, socket.remote_addr.ip_addr.addr_size);
-
-    // socket.state = CONNECTED;
 
     return 0; // ca s'est bien passé ;)
 }
@@ -106,10 +131,10 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
  */
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-    mic_tcp_sock *sock = &socketTab[mic_sock];
+    mic_tcp_sock sock = socketTab[mic_sock];
 
     // Vérifie que l'adresse distante a été définie
-    if (sock->remote_addr.ip_addr.addr_size <= 0) {
+    if (sock.remote_addr.ip_addr.addr_size <= 0) {
         fprintf(stderr, "[MIC-TCP] Erreur : adresse distante non définie (mic_tcp_connect oublié ?)\n");
         return -1;
     }
@@ -118,12 +143,28 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     pdu.payload.data = mesg;
     pdu.payload.size = mesg_size;
 
-    pdu.header.source_port = sock->local_addr.port;  // logique : envoyer depuis le port bindé oblige de apsser aevc des pointeur car si on modifie une structure global ce qu'on faisait avant
+    pdu.header.source_port = sock.local_addr.port;  // logique : envoyer depuis le port bindé oblige de apsser aevc des pointeur car si on modifie une structure global ce qu'on faisait avant
     // etait juste une copie local  dans la pile de la fonction detruite a la fin de celle ci 
-    pdu.header.dest_port = sock->remote_addr.port;
+    pdu.header.dest_port = sock.remote_addr.port;
 
-//Envoyer un message (dont la taille le contenu sont passés en paramètres).
-    int sent_size = IP_send(pdu,sock->remote_addr.ip_addr); //structure mictcp_socket_addr contenue dans la structure mictcp_socket correspondant au socket identifié par mic_sock passé en paramètre).
+    int timeout = 5000;
+    int ack_recu = 0;
+    int sent_size = -1;
+    mic_tcp_pdu ack;
+    ack.payload.size = 8;
+
+    mic_tcp_ip_addr src;
+    mic_tcp_ip_addr dst;
+
+    mic_tcp_sock_addr ack_addr;
+    while (!ack_recu) {
+        sent_size = IP_send(pdu, sock.remote_addr.ip_addr); // <--
+
+        if (IP_recv(&ack, &src, &dst, timeout) != -1 && ack.header.ack == '1') {
+            ack_recu = 1;
+        }
+    }
+
     return sent_size;
 }
 
@@ -137,7 +178,6 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
  */
 int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
-
     if (mesg == NULL || max_mesg_size <= 0) {
         fprintf(stderr, "[MIC-TCP] Erreur : buffer invalide dans recv\n");
         return -1;
@@ -147,7 +187,9 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
     payload.data = mesg;
     payload.size = max_mesg_size;
 
+
     int effective_data_size = app_buffer_get(payload);
+
     return effective_data_size;
 }
 
@@ -181,18 +223,10 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
 
-    // Si le port de destination correspond à notre socket
-    for (int i = 0; i < nbSocket; i++) {
-        // On travaille directement sur la copie locale de socketTab[i] pas necessaire de travailler avec le tab directement on veut juste lire pas ecrire ;)
-        mic_tcp_sock socket = socketTab[i];
+    app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
+    mic_tcp_pdu ack;
+    ack.payload.size = 8;
+    ack.header.ack = '1';
+    IP_send(ack, remote_addr);
 
-        if (socket.state != IDLE) {
-            if (pdu.header.dest_port == socket.local_addr.port) {
-                app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
-                
-            }
-        }
-    }
-
-    fprintf(stderr, "[MIC-TCP] PDU reçu pour port inconnu: %d\n", pdu.header.dest_port);
 }
