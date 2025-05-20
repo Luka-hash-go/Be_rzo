@@ -16,7 +16,7 @@ mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
- * Retourne le descripteur du socket ou bien -1 en cas d'erreur
+ * Retourne le descripteur du socket ou bien -1 en cas d'erreurr
  */
 
 int mic_tcp_socket(start_mode sm) {
