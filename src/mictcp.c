@@ -210,7 +210,17 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         ack.payload.size = 0;
         ack.header.source_port = pdu.header.dest_port;
         ack.header.dest_port = pdu.header.source_port;
+        // test 
 
+        mic_tcp_ip_addr ack_addr;
+        ack_addr.addr_size = remote_addr.addr_size;
+        ack_addr.addr = malloc(ack_addr.addr_size + 1);
+        memcpy(ack_addr.addr, remote_addr.addr, ack_addr.addr_size);
+        ack_addr.addr[ack_addr.addr_size] = '\0'; // sécurité
+
+        IP_send(ack, ack_addr);
+        free(ack_addr.addr);
+        // test
         IP_send(ack, remote_addr);
         expected_seq = (expected_seq + 1) % 2;
     } else {
