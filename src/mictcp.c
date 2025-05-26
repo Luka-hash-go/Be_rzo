@@ -127,17 +127,18 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
             nb_envoyes++;
             sock.state = WAITING_FOR_ACK;
 
-            if (IP_recv(&ack, &sock.local_addr, &sock.remote_addr, timeout) == -1){
+            if (IP_recv(&pdu, &sock.local_addr.ip_addr, &sock.remote_addr.ip_addr, timeout) == -1){
                 // On renvoie le PDU si le timer a expiré
                     sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
                     printf("Renvoi du paquet : %d, tentative n° : %d.\n",numero_paquet,nb_envoyes);
                     nb_envoyes++;
             }
             // Si le timer n'a pas expiré
-            } else {
+            else {
             // On sort du while seulement si on a le bon ack
-            if (PDU.header.ack && PDU.header.ack_num == PE) {
-                        ack_recu = 1;
+            if (PDU.header.ack && pdu.header.ack_num == seq_num_send) {
+                ack_recu = 1;
+            }
             }
         }
         sock.state = ESTABLISHED;
@@ -205,14 +206,13 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     
     // Header de notre PDU
-	pdu.header.ack_num     = seq_num;
+	pdu.header.ack_num     = seq_num_recv;
 	pdu.header.ack         = 1;
     IP_send(pdu, remote_addr);
 
 	if (pdu.header.seq_num == seq_num_recv ){
         // Insertion des données utiles (message + taille) du PDU dans le buffer de réception du socket
         app_buffer_put(pdu.payload);
-		sock.state = ESTABLISHED;
 		// On ne peut envoyer/recevoir qu'un message à la fois
         seq_num_recv= (seq_num_recv+1) %2;
     }
