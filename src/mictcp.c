@@ -9,7 +9,7 @@ int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 
 char* buffer_reception;
 short nouvelle_donnee = 0;
-int seq_number = 0;
+int seq_num = 0;
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -191,9 +191,15 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     static int expected_seq = 0; // Numéro de séquence attendu pour Stop-and-Wait
-     if (pdu.header.seq_num == expected_seq) {
+    
+      if (remote_addr.addr == NULL || remote_addr.addr_size == 0) {
+        fprintf(stderr, "[MIC-TCP] ERREUR: remote_addr non initialisé dans process_received_PDU\n");
+        return;
+    }
+
+    if (pdu.header.seq_num == expected_seq) {
         app_buffer_put(pdu.payload);
-        taille_donnee = pdu.payload.size;
+        
 
         mic_tcp_pdu ack;
         ack.header.seq_num = expected_seq;
