@@ -218,7 +218,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         ack.header.source_port = pdu.header.dest_port;
         ack.header.dest_port = pdu.header.source_port;
 
-        IP_send(ack, remote_addr);
+        IP_send(ack, remote_addr); // test
     }
 
 }
