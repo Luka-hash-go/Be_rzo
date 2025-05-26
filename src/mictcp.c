@@ -133,7 +133,9 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
             // Si le timer n'a pas expiré
             else {
             // On sort du while seulement si on a le bon ack
-                if (pdu.header.ack && pdu.header.ack_num == seq_num_send) {
+                int current_seq = seq_num_send;
+                seq_num_send = (seq_num_send + 1) % 2;
+                if (pdu.header.ack && pdu.header.ack_num == current_seq) {
                     ack_recu = 1;
                 }
             }
@@ -213,6 +215,17 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         // On ne peut envoyer/recevoir qu'un message à la fois
         seq_num_recv= (seq_num_recv+1) %2;
     }
+
+       // Construire un PDU d'ACK
+    mic_tcp_pdu ack_pdu;
+    memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
+    ack_pdu.header.source_port = pdu.header.dest_port;
+    ack_pdu.header.dest_port   = pdu.header.source_port;
+    ack_pdu.header.ack         = 1;
+    ack_pdu.header.ack_num     = pdu.header.seq_num;
+
+    // Envoyer l’ACK sans payload
+    IP_send(ack_pdu, remote_addr);
 
 }
 
