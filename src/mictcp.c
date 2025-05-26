@@ -1,7 +1,5 @@
 #include <mictcp.h>
 #include <api/mictcp_core.h>
-#include <pthread.h>
-
 
 
 #define nbMaxSocket 10
