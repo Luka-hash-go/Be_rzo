@@ -2,21 +2,13 @@
 #include <api/mictcp_core.h>
 #include <pthread.h>
 
-// typedef struct mic_tcp_sock
-// {
-//   int fd;  /* descripteur du socket */
-//   protocol_state state; /* état du protocole */
-//   mic_tcp_sock_addr local_addr; /* adresse locale du socket */
-//   mic_tcp_sock_addr remote_addr; /* adresse distante du socket */
-// } mic_tcp_sock;
+
 
 #define nbMaxSocket 10
 unsigned short port = 5000;
 mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 
-pthread_mutex_t mutex_reception = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond_reception = PTHREAD_COND_INITIALIZER;
 char* buffer_reception;
 short nouvelle_donnee = 0;
 int seq_number = 0;
@@ -75,44 +67,10 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
-    /*mic_tcp_pdu pduAccept;
-
-    pduAccept.header.source_port = port;
-    pduAccept.header.dest_port = port;
-
-    printf("<- Syn\n");
-    printf("Local : %s, Dest : %s \n", socketTab[socketID].local_addr.ip_addr.addr, NULL);
-    int result = IP_recv(&pduAccept, &socketTab[socketID].local_addr.ip_addr, &addr->ip_addr, 1000);
-
-    if (result < 0 || pduAccept.header.syn == '0') {
-        fprintf(stderr, "Syn non recu");
-    }
-
-
-    pduAccept.header.syn = '1';
-    pduAccept.header.ack = '1';
-    printf("-> SynAck");
-    IP_send(pduAccept, addr->ip_addr);
-    printf("<- Ack");
-    result = IP_recv(&pduAccept, &socketTab[socketID].local_addr.ip_addr, &addr->ip_addr, 1000);
-
-    if (result < 0 || pduAccept.header.ack == '0') {
-        fprintf(stderr, "Ack non recu");
-    }*/
+   
 
     printf("Receive connect\n");
     socketTab[socketID].state = CONNECTED;
-
-    // mic_tcp_sock socket = socketTab[socketID];
-
-    // // on a pas reellement de phase de connection
-    // socket.state = CONNECTED;
-
-    // // On copie l'adresse 
-    // if (addr != NULL) {
-    //     socket.remote_addr.ip_addr = addr->ip_addr;
-    //     socket.remote_addr.port = addr->port;
-    // }
 
     return 0; // Connexion acceptée
 }
@@ -148,39 +106,34 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
         return -1;
     }
     // Créer un mic_tcp_pdu
-    mic_tcp_pdu pdu; // grace à la structure pdu_mic_tcp
+    mic_tcp_pdu pdu;
     pdu.payload.data = mesg;
     pdu.payload.size = mesg_size;
-    pdu.header.seq_num = 0;
-
-    pdu.header.source_port = sock.local_addr.port;  // logique : envoyer depuis le port bindé oblige de apsser aevc des pointeur car si on modifie une structure global ce qu'on faisait avant
-    // etait juste une copie local  dans la pile de la fonction detruite a la fin de celle ci 
+    pdu.header.source_port = sock.local_addr.port;
     pdu.header.dest_port = sock.remote_addr.port;
+    pdu.header.ack = 0;
+    pdu.header.syn = 0;
+    pdu.header.fin = 0;
 
     int timeout = 5000;
+    mic_tcp_pdu ack;
+    mic_tcp_ip_addr src, dst;
     int ack_recu = 0;
     int sent_size = -1;
-    mic_tcp_pdu ack;
-    ack.payload.size = 8;
-
-    mic_tcp_ip_addr src;
-    mic_tcp_ip_addr dst;
-
-    mic_tcp_sock_addr ack_addr;
-    static int seq_num = 0; // Numéro de séquence pour Stop-and-Wait
-    pdu.header.ack = '0'; // on initialise le flag ack  
-
-    pdu.header.seq_num = seq_num;
 
     while (!ack_recu) {
-        sent_size = IP_send(pdu, sock.remote_addr.ip_addr); // <--
+        sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
 
-        if (IP_recv(&ack, &src, &dst, timeout) != -1 && ack.header.ack == '1'&& ack.header.seq_num == seq_num) {
+        if (IP_recv(&ack, &src, &dst, timeout) != -1
+            && ack.header.ack == 1
+            && ack.header.seq_num == seq_num) {
             ack_recu = 1;
+        } else {
+            printf("[MIC-TCP] Timeout ou mauvais ACK, retransmission.\n");
         }
     }
-     seq_num = (seq_num + 1) % 2; // Alterne entre 0 et 1
 
+    seq_num = (seq_num + 1) % 2;
     return sent_size;
 }
 
@@ -199,16 +152,13 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
         return -1;
     }
 
-    pthread_mutex_lock(&mutex_reception);
-    while (nouvelle_donnee == 0) pthread_cond_wait(&cond_reception, &mutex_reception);
-
+    
     mic_tcp_payload payload;
     payload.data = mesg;
     payload.size = max_mesg_size;
     int effective_data_size = app_buffer_get(payload);
 
-    nouvelle_donnee = 0;
-    pthread_mutex_unlock(&mutex_reception);
+   
 
     return effective_data_size;
 }
@@ -243,33 +193,34 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     static int expected_seq = 0; // Numéro de séquence attendu pour Stop-and-Wait
-    if (pdu.header.dest_port == port  && pdu.header.seq_num == expected_seq) {
-        pthread_mutex_lock(&mutex_reception);
-        app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
-        nouvelle_donnee = 1;
-        pthread_cond_signal(&cond_reception);
-        pthread_mutex_unlock(&mutex_reception);
-    
+     if (pdu.header.seq_num == expected_seq) {
+        memcpy(buffer_temp, pdu.payload.data, pdu.payload.size);
+        taille_donnee = pdu.payload.size;
+
         mic_tcp_pdu ack;
-        ack.header.source_port = pdu.header.dest_port;  // on inverse
-        ack.header.dest_port = pdu.header.source_port;
-        ack.payload.size = 8;
-        ack.header.ack = '1';
-        ack.header.seq_num = expected_seq; // On acquitte le bon numéro de séquence
-        IP_send(ack, _addr);
-        expected_seq = (expected_seq + 1) % 2; // Alterne entre 0 et 1
-    }
-    else {
-        printf("Paquet incorrect recu ! \n");
-        mic_tcp_pdu ack;
-        ack.payload.size = 8;
+        ack.header.seq_num = expected_seq;
+        ack.header.ack = 1;
+        ack.header.syn = 0;
+        ack.header.fin = 0;
         ack.payload.data = NULL;
-        ack.header.ack = '1';
-        expected_seq = (expected_seq + 1) % 2;
+        ack.payload.size = 0;
         ack.header.source_port = pdu.header.dest_port;
         ack.header.dest_port = pdu.header.source_port;
+
+        IP_send(ack, remote_addr);
+        expected_seq = (expected_seq + 1) % 2;
+    } else {
+        mic_tcp_pdu ack;
+        ack.header.seq_num = (expected_seq + 1) % 2; // dernier bon reçu
+        ack.header.ack = 1;
+        ack.header.syn = 0;
+        ack.header.fin = 0;
+        ack.payload.data = NULL;
+        ack.payload.size = 0;
+        ack.header.source_port = pdu.header.dest_port;
+        ack.header.dest_port = pdu.header.source_port;
+
         IP_send(ack, remote_addr);
     }
-
 
 }
