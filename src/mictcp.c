@@ -9,7 +9,6 @@ int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 
 char* buffer_reception;
 short nouvelle_donnee = 0;
-int seq_num = 0;
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -191,7 +190,7 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     static int expected_seq = 0; // Numéro de séquence attendu pour Stop-and-Wait
-    
+    int seq_num = 0;
       if (remote_addr.addr == NULL || remote_addr.addr_size == 0) {
         fprintf(stderr, "[MIC-TCP] ERREUR: remote_addr non initialisé dans process_received_PDU\n");
         return;
@@ -221,7 +220,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         IP_send(ack, ack_addr);
         free(ack_addr.addr);
         // test
-        IP_send(ack, remote_addr);
+        //IP_send(ack, remote_addr);
         expected_seq = (expected_seq + 1) % 2;
     } else {
         mic_tcp_pdu ack;
@@ -234,7 +233,17 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         ack.header.source_port = pdu.header.dest_port;
         ack.header.dest_port = pdu.header.source_port;
 
-        IP_send(ack, remote_addr); // test
+        //test
+        
+        mic_tcp_ip_addr ack_addr;
+        ack_addr.addr_size = remote_addr.addr_size;
+        ack_addr.addr = malloc(ack_addr.addr_size + 1);
+        memcpy(ack_addr.addr, remote_addr.addr, ack_addr.addr_size);
+        ack_addr.addr[ack_addr.addr_size] = '\0';
+
+        //IP_send(ack, remote_addr); // test
+        IP_send(ack, ack_addr);
+        free(ack_addr.addr);
     }
 
 }
