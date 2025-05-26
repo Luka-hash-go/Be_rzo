@@ -136,16 +136,17 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
             // Si le timer n'a pas expiré
             else {
             // On sort du while seulement si on a le bon ack
-            if (PDU.header.ack && pdu.header.ack_num == seq_num_send) {
-                ack_recu = 1;
-            }
+                if (pdu.header.ack && pdu.header.ack_num == seq_num_send) {
+                    ack_recu = 1;
+                }
             }
         }
         sock.state = ESTABLISHED;
         return sent_size;
     }
+    
     else{
-        return - 1
+        return - 1;
     }
 }
 
