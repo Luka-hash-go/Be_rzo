@@ -80,11 +80,11 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
 
     // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
     socketTab[socketID].remote_addr = addr;
-    socketTab[socketID].state = CONNECTED;
-
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
+
+    socketTab[socketID].state = CONNECTED; // Set state after validation
 
     return 0; // ca s'est bien passé ;)
 }
@@ -97,11 +97,11 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     mic_tcp_sock sock = socketTab[mic_sock];
     int sent_size;
 
-    
     // Créer un mic_tcp_pdu
     mic_tcp_pdu pdu;
 
-    if ((sock.fd == mic_sock) && (sock.state == ESTABLISHED)){
+    // Correction : état CONNECTED (pas ESTABLISHED)
+    if ((sock.fd == mic_sock) && (sock.state == CONNECTED)){
         pdu.header.source_port = sock.local_addr.port;
         pdu.header.dest_port = sock.remote_addr.port;
         pdu.header.seq_num = seq_num_send;
@@ -111,35 +111,35 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
         pdu.payload.data = mesg;
         pdu.payload.size = mesg_size;
 
-       int current_seq = seq_num_send;
-
+        int current_seq = seq_num_send;
         int ack_recu = 0;
-    
 
         while (!ack_recu) {
             sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
-            printf("Envoi du paquet : %d, tentative n° : %d.\n",current_seq,nb_envoyes);
+            printf("Envoi du paquet : %d, tentative n° : %d.\n", current_seq, nb_envoyes + 1);
             nb_envoyes++;
-            sock.state = WAITING_FOR_ACK;
 
             mic_tcp_pdu ack_pdu;
             int timeout = 2000;
 
-           
+            // Wait for acknowledgment
             if (IP_recv(&ack_pdu, &sock.local_addr.ip_addr, &sock.remote_addr.ip_addr, timeout) != -1) {
-                if (ack_pdu.header.ack && ack_pdu.header.ack_num == current_seq) {
+                // Correction : vérifier ack == 1 et ack_num == current_seq
+                if (ack_pdu.header.ack == 1 && ack_pdu.header.ack_num == current_seq) {
+                    printf("ACK reçu pour le paquet : %d\n", current_seq);
                     ack_recu = 1;
+                } else {
+                    printf("ACK incorrect reçu (ack_num: %d, attendu: %d)\n", ack_pdu.header.ack_num, current_seq);
                 }
             } else {
-                printf("Timeout - Réémission nécessaire\n");
+                printf("Timeout - Réémission nécessaire pour le paquet : %d\n", current_seq);
             }
-        sock.state = ESTABLISHED;
+        }
+
+        seq_num_send = (seq_num_send + 1) % 2;
         return sent_size;
     }
-    
-    seq_num_send = (seq_num_send + 1) % 2;
-    return sent_size;
-    }
+    return -1;
 }
 
 
@@ -174,18 +174,17 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
  */
 int mic_tcp_close (int socketID) {
     printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
-   
+
     if (socketID < 0 || socketID >= nbSocket) {
-        fprintf(stderr, "[MIC-TCP] Erreur : socketID %d invalide dans close\n", socketID); // seule erreur possible que je vois lors d'un close :(
+        fprintf(stderr, "[MIC-TCP] Erreur : socketID %d invalide dans close\n", socketID);
         return -1;
     }
 
-    // on passe ne idle on finie
     socketTab[socketID].state = IDLE;
-    close(socketTab[socketID].fd);
-    socketTab[socketID].fd = -1; // on le marque comme fermé on le reutilisera mais on mettra de nouveau à jour son fd etc ...
+    // Correction : ne pas appeler close() sur fd, juste marquer comme fermé
+    socketTab[socketID].fd = -1;
 
-    return 0; // on simule la fermeture 
+    return 0;
 }
 
 /*
@@ -196,33 +195,36 @@ int mic_tcp_close (int socketID) {
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
-    
-    // Header de notre PDU
-    //pdu.header.ack_num     = seq_num_recv;
-    //pdu.header.ack         = 1;
-    //IP_send(pdu, remote_addr);
 
-    if (pdu.header.seq_num == seq_num_recv ){
-        // Insertion des données utiles (message + taille) du PDU dans le buffer de réception du socket
+    // Correction : traiter le PDU reçu selon le numéro de séquence attendu
+    if (pdu.header.seq_num == seq_num_recv) {
+        // Insertion des données utiles dans le buffer de réception
         app_buffer_put(pdu.payload);
-        // On ne peut envoyer/recevoir qu'un message à la fois
-        seq_num_recv= (seq_num_recv+1) %2;
-    }
-    else {
+
+        // Construire un PDU d'ACK pour ce numéro de séquence
+        mic_tcp_pdu ack_pdu;
+        memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
+        ack_pdu.header.source_port = pdu.header.dest_port;
+        ack_pdu.header.dest_port   = pdu.header.source_port;
+        ack_pdu.header.ack         = 1;
+        ack_pdu.header.ack_num     = seq_num_recv;
+
+        IP_send(ack_pdu, remote_addr);
+
+        seq_num_recv = (seq_num_recv + 1) % 2;
+    } else {
         printf("PDU reçu hors séquence (reçu: %d, attendu: %d) — ACK du précédent renvoyé\n", pdu.header.seq_num, seq_num_recv);
+
+        // Réenvoyer un ACK pour le dernier paquet reçu correctement
+        mic_tcp_pdu ack_pdu;
+        memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
+        ack_pdu.header.source_port = pdu.header.dest_port;
+        ack_pdu.header.dest_port   = pdu.header.source_port;
+        ack_pdu.header.ack         = 1;
+        ack_pdu.header.ack_num     = (seq_num_recv + 1) % 2; // dernier reçu correctement
+
+        IP_send(ack_pdu, remote_addr);
     }
-
-       // Construire un PDU d'ACK
-    mic_tcp_pdu ack_pdu;
-    memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
-    ack_pdu.header.source_port = pdu.header.dest_port;
-    ack_pdu.header.dest_port   = pdu.header.source_port;
-    ack_pdu.header.ack         = 1;
-    ack_pdu.header.ack_num     = pdu.header.seq_num;
-
-    // Envoyer l’ACK sans payload
-    IP_send(ack_pdu, remote_addr);
-
 }
 
 
