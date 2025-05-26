@@ -209,7 +209,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         expected_seq = (expected_seq + 1) % 2;
     } else {
         mic_tcp_pdu ack;
-        ack.header.seq_num = (expected_seq + 1) % 2; // dernier bon reçu
+        ack.header.seq_num = (expected_seq + 1) % 2; // dernier bon reçu okay
         ack.header.ack = 1;
         ack.header.syn = 0;
         ack.header.fin = 0;
