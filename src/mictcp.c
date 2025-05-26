@@ -243,7 +243,7 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     static int expected_seq = 0; // Numéro de séquence attendu pour Stop-and-Wait
-    if (pdu.header.dest_port == port && pdu.header.seq_num == seq_number && pdu.header.seq_num == expected_seq) {
+    if (pdu.header.dest_port == port  && pdu.header.seq_num == expected_seq) {
         pthread_mutex_lock(&mutex_reception);
         app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
         nouvelle_donnee = 1;
@@ -251,14 +251,24 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         pthread_mutex_unlock(&mutex_reception);
     
         mic_tcp_pdu ack;
+        ack.header.source_port = pdu.header.dest_port;  // on inverse
+        ack.header.dest_port = pdu.header.source_port;
         ack.payload.size = 8;
         ack.header.ack = '1';
         ack.header.seq_num = expected_seq; // On acquitte le bon numéro de séquence
-        IP_send(ack, remote_addr);
+        IP_send(ack, _addr);
         expected_seq = (expected_seq + 1) % 2; // Alterne entre 0 et 1
     }
     else {
         printf("Paquet incorrect recu ! \n");
+        mic_tcp_pdu ack;
+        ack.payload.size = 8;
+        ack.payload.data = NULL;
+        ack.header.ack = '1';
+        expected_seq = (expected_seq + 1) % 2;
+        ack.header.source_port = pdu.header.dest_port;
+        ack.header.dest_port = pdu.header.source_port;
+        IP_send(ack, remote_addr);
     }
 
 
