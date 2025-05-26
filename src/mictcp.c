@@ -157,6 +157,20 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     mic_tcp_ip_addr dst;
 
     mic_tcp_sock_addr ack_addr;
+  
+    pdu.header.ack = '0'; // on initialise le flag ack  
+
+
+    if(pdu.header.dest_port == 0 || pdu.header.source_port == 0) {
+        fprintf(stderr, "[MIC-TCP] Erreur : ports source ou destination non définis dans send\n");
+        return -1;
+    }
+     // on check numero de séquence est le bon 
+    if (pdu.header.seq_num == 0) {
+        fprintf(stderr, "[MIC-TCP] Erreur : numéro de séquence non défini dans send\n");
+        return -1;  
+    }
+
     while (!ack_recu) {
         sent_size = IP_send(pdu, sock.remote_addr.ip_addr); // <--
 
