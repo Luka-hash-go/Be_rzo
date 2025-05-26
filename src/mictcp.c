@@ -1,16 +1,17 @@
 #include <mictcp.h>
-#include <api/mictcp_core.h>
-
-
-
+#include <../include/api/mictcp_core.h>
 
 #define nbMaxSocket 10
 unsigned short port = 5000;
 mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
+int seq_num_recv = 0;
+int seq_num_send = 0;
+int nb_envoyes = 0;
+int numero_paquet = 0;
+
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
- * Retourne le descripteur du socket ou bien -1 en cas d'erreur
  * Retourne le descripteur du socket ou bien -1 en cas d'erreurr
  */
 
@@ -19,7 +20,7 @@ int mic_tcp_socket(start_mode sm) {
 
     printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
     int result = initialize_components(sm); /* Appel obligatoire et initialise les compo de l'api */ 
-
+    
 
     if (result < 0) {
         return -1; // Échec de l'initialisation
@@ -37,6 +38,8 @@ int mic_tcp_socket(start_mode sm) {
     // Ajout du socket dans le tableau associé
     socketTab[mon_socket.fd] = mon_socket;
     nbSocket++;
+
+    set_loss_rate(0.5);
 
     return mon_socket.fd; // Retourner l’identifiant du socket
 }
@@ -61,6 +64,11 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
+   
+    socketTab[socketID].remote_addr = *addr;
+    printf("Receive connect\n");
+    socketTab[socketID].state = CONNECTED;
+
     return 0; // Connexion acceptée
 }
 /*
@@ -72,7 +80,7 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
 
     // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
     socketTab[socketID].remote_addr = addr;
-    socketTab[socketID].state = ESTABLISHED;
+    socketTab[socketID].state = CONNECTED;
 
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
@@ -86,27 +94,58 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
  */
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
-    mic_tcp_sock *sock = &socketTab[mic_sock];
+    mic_tcp_sock sock = socketTab[mic_sock];
+    int sent_size;
 
-    // Vérifie que l'adresse distante a été définie
-    if (sock->remote_addr.ip_addr.addr_size <= 0) {
-        fprintf(stderr, "[MIC-TCP] Erreur : adresse distante non définie (mic_tcp_connect oublié ?)\n");
-        return -1;
-    }
+    
     // Créer un mic_tcp_pdu
-    mic_tcp_pdu pdu; // grace à la structure pdu_mic_tcp
-    pdu.payload.data = mesg;
-    pdu.payload.size = mesg_size;
+    mic_tcp_pdu pdu;
 
-    pdu.header.source_port = sock->local_addr.port;  // logique : envoyer depuis le port bindé oblige de apsser aevc des pointeur car si on modifie une structure global ce qu'on faisait avant
-    // etait juste une copie local  dans la pile de la fonction detruite a la fin de celle ci 
-    pdu.header.dest_port = sock->remote_addr.port;
+    if ((sock.fd == mic_sock) && (sock.state == ESTABLISHED)){
+        pdu.header.source_port = sock.local_addr.port;
+        pdu.header.dest_port = sock.remote_addr.port;
+        pdu.header.seq_num = seq_num_send;
+        pdu.header.ack = 0;
+        pdu.header.syn = 0;
+        pdu.header.fin = 0;
+        pdu.payload.data = mesg;
+        pdu.payload.size = mesg_size;
 
-//Envoyer un message (dont la taille le contenu sont passés en paramètres).
-    int sent_size = IP_send(pdu,sock->remote_addr.ip_addr); //structure mictcp_socket_addr contenue dans la structure mictcp_socket correspondant au socket identifié par mic_sock passé en paramètre).
-    return sent_size;
+        seq_num_send = (seq_num_send+1)%2;
+
+        int timeout = 5000;
+        int ack_recu = 0;
+    
+
+        while (!ack_recu) {
+            sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
+            printf("Envoi du paquet : %d, tentative n° : %d.\n",numero_paquet,nb_envoyes);
+            numero_paquet++;
+            nb_envoyes++;
+            sock.state = WAITING_FOR_ACK;
+
+            if (IP_recv(&pdu, &sock.local_addr.ip_addr, &sock.remote_addr.ip_addr, timeout) == -1){
+                // On renvoie le PDU si le timer a expiré
+                    sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
+                    printf("Renvoi du paquet : %d, tentative n° : %d.\n",numero_paquet,nb_envoyes);
+                    nb_envoyes++;
+            }
+            // Si le timer n'a pas expiré
+            else {
+            // On sort du while seulement si on a le bon ack
+                if (pdu.header.ack && pdu.header.ack_num == seq_num_send) {
+                    ack_recu = 1;
+                }
+            }
+        }
+        sock.state = ESTABLISHED;
+        return sent_size;
+    }
+    
+    else{
+        return - 1;
+    }
 }
-
 
 
  /*
@@ -117,17 +156,19 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
  */
 int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
-
     if (mesg == NULL || max_mesg_size <= 0) {
         fprintf(stderr, "[MIC-TCP] Erreur : buffer invalide dans recv\n");
         return -1;
     }
 
+    
     mic_tcp_payload payload;
     payload.data = mesg;
     payload.size = max_mesg_size;
-
     int effective_data_size = app_buffer_get(payload);
+
+   
+
     return effective_data_size;
 }
 
@@ -138,7 +179,7 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
  */
 int mic_tcp_close (int socketID) {
     printf("[MIC-TCP] Appel de la fonction :  "); printf(__FUNCTION__); printf("\n");
-
+   
     if (socketID < 0 || socketID >= nbSocket) {
         fprintf(stderr, "[MIC-TCP] Erreur : socketID %d invalide dans close\n", socketID); // seule erreur possible que je vois lors d'un close :(
         return -1;
@@ -160,19 +201,19 @@ int mic_tcp_close (int socketID) {
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
+    
+    // Header de notre PDU
+    pdu.header.ack_num     = seq_num_recv;
+    pdu.header.ack         = 1;
+    IP_send(pdu, remote_addr);
 
-    // Si le port de destination correspond à notre socket
-    for (int i = 0; i < nbSocket; i++) {
-        // On travaille directement sur la copie locale de socketTab[i] pas necessaire de travailler avec le tab directement on veut juste lire pas ecrire ;)
-        mic_tcp_sock socket = socketTab[i];
-
-        if (socket.state != IDLE) {
-            if (pdu.header.dest_port == socket.local_addr.port) {
-                app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
-
-            }
-        }
+    if (pdu.header.seq_num == seq_num_recv ){
+        // Insertion des données utiles (message + taille) du PDU dans le buffer de réception du socket
+        app_buffer_put(pdu.payload);
+        // On ne peut envoyer/recevoir qu'un message à la fois
+        seq_num_recv= (seq_num_recv+1) %2;
     }
 
-    fprintf(stderr, "[MIC-TCP] PDU reçu pour port inconnu: %d\n", pdu.header.dest_port);
 }
+
+
