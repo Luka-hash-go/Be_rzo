@@ -167,27 +167,19 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     mic_tcp_ip_addr dst;
 
     mic_tcp_sock_addr ack_addr;
-  
+    static int seq_num = 0; // Numéro de séquence pour Stop-and-Wait
     pdu.header.ack = '0'; // on initialise le flag ack  
 
-
-    if(pdu.header.dest_port == 0 || pdu.header.source_port == 0) {
-        fprintf(stderr, "[MIC-TCP] Erreur : ports source ou destination non définis dans send\n");
-        return -1;
-    }
-     // on check numero de séquence est le bon 
-    if (pdu.header.seq_num == 0) {
-        fprintf(stderr, "[MIC-TCP] Erreur : numéro de séquence non défini dans send\n");
-        return -1;  
-    }
+    pdu.header.seq_num = seq_num;
 
     while (!ack_recu) {
         sent_size = IP_send(pdu, sock.remote_addr.ip_addr); // <--
 
-        if (IP_recv(&ack, &src, &dst, timeout) != -1 && ack.header.ack == '1') {
+        if (IP_recv(&ack, &src, &dst, timeout) != -1 && ack.header.ack == '1'&& ack.header.seq_num == seq_num) {
             ack_recu = 1;
         }
     }
+     seq_num = (seq_num + 1) % 2; // Alterne entre 0 et 1
 
     return sent_size;
 }
@@ -250,18 +242,20 @@ int mic_tcp_close (int socketID) {
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
-
-    if (pdu.header.dest_port == port && pdu.header.seq_num == seq_number) {
+    static int expected_seq = 0; // Numéro de séquence attendu pour Stop-and-Wait
+    if (pdu.header.dest_port == port && pdu.header.seq_num == seq_number && pdu.header.seq_num == expected_seq) {
         pthread_mutex_lock(&mutex_reception);
         app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
         nouvelle_donnee = 1;
         pthread_cond_signal(&cond_reception);
         pthread_mutex_unlock(&mutex_reception);
-        seq_number++;
+    
         mic_tcp_pdu ack;
         ack.payload.size = 8;
         ack.header.ack = '1';
+        ack.header.seq_num = expected_seq; // On acquitte le bon numéro de séquence
         IP_send(ack, remote_addr);
+        expected_seq = (expected_seq + 1) % 2; // Alterne entre 0 et 1
     }
     else {
         printf("Paquet incorrect recu ! \n");
