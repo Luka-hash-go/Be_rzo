@@ -1,6 +1,6 @@
 #include <mictcp.h>
 #include <api/mictcp_core.h>
-
+#include <pthread.h>
 
 // typedef struct mic_tcp_sock
 // {
@@ -14,6 +14,13 @@
 unsigned short port = 5000;
 mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
+
+pthread_mutex_t mutex_reception = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond_reception = PTHREAD_COND_INITIALIZER;
+char* buffer_reception;
+short nouvelle_donnee = 0;
+int seq_number = 0;
+
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
  * Retourne le descripteur du socket ou bien -1 en cas d'erreurr
@@ -42,6 +49,8 @@ int mic_tcp_socket(start_mode sm) {
     // Ajout du socket dans le tableau associé
     socketTab[mon_socket.fd] = mon_socket;
     nbSocket++;
+
+    set_loss_rate(0.5);
 
     return mon_socket.fd; // Retourner l’identifiant du socket
 }
@@ -142,6 +151,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
     mic_tcp_pdu pdu; // grace à la structure pdu_mic_tcp
     pdu.payload.data = mesg;
     pdu.payload.size = mesg_size;
+    pdu.header.seq_num = 0;
 
     pdu.header.source_port = sock.local_addr.port;  // logique : envoyer depuis le port bindé oblige de apsser aevc des pointeur car si on modifie une structure global ce qu'on faisait avant
     // etait juste une copie local  dans la pile de la fonction detruite a la fin de celle ci 
@@ -197,12 +207,16 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
         return -1;
     }
 
+    pthread_mutex_lock(&mutex_reception);
+    while (nouvelle_donnee == 0) pthread_cond_wait(&cond_reception, &mutex_reception);
+
     mic_tcp_payload payload;
     payload.data = mesg;
     payload.size = max_mesg_size;
-
-
     int effective_data_size = app_buffer_get(payload);
+
+    nouvelle_donnee = 0;
+    pthread_mutex_unlock(&mutex_reception);
 
     return effective_data_size;
 }
@@ -237,10 +251,21 @@ int mic_tcp_close (int socketID) {
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
 
-    app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
-    mic_tcp_pdu ack;
-    ack.payload.size = 8;
-    ack.header.ack = '1';
-    IP_send(ack, remote_addr);
+    if (pdu.header.dest_port == port && pdu.header.seq_num == seq_number) {
+        pthread_mutex_lock(&mutex_reception);
+        app_buffer_put(pdu.payload); // on traite le pdu c'est cool :o
+        nouvelle_donnee = 1;
+        pthread_cond_signal(&cond_reception);
+        pthread_mutex_unlock(&mutex_reception);
+        seq_number++;
+        mic_tcp_pdu ack;
+        ack.payload.size = 8;
+        ack.header.ack = '1';
+        IP_send(ack, remote_addr);
+    }
+    else {
+        printf("Paquet incorrect recu ! \n");
+    }
+
 
 }

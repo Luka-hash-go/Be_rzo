@@ -18,7 +18,7 @@
 #define ENABLE_TCP_LOSS 1
 #define MAX_UDP_SEGMENT_SIZE 1480
 #define MICTCP_PORT 1337
-#define VIDEO_FILE "../video/video.bin"
+#define VIDEO_FILE "../video/video_starwars.bin"
 
 /**
  * Macro utilisée pour afficher le message d'erreur msg passé en paramètre
@@ -341,6 +341,8 @@ static int read_rtp_packet(FILE *fd, struct timespec *timestamp, char *buffer, i
     fread(&packet_size, 1, sizeof(int), fd);
 
     /* Lecture du paquet rdp */
+    printf("Buffer size : %d \n", buffer_size);
+    printf("Paquet size : %d \n", packet_size);
     ERROR_IF(packet_size > buffer_size, "Buffer is too small to store the packet");
     return fread(buffer, 1, packet_size, fd);
 }
