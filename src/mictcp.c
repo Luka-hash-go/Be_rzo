@@ -191,7 +191,7 @@ int mic_tcp_close (int socketID) {
  * Traitement d’un PDU MIC-TCP reçu (mise à jour des numéros de séquence
  * et d'acquittement, etc.) puis insère les données utiles du PDU dans
  * le buffer de réception du socket. Cette fonction utilise la fonction
- * app_buffer_put().
+ * app_buffer_put()..
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
