@@ -177,7 +177,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
             }
         }
         seq_num_send = (seq_num_send + 1) % 2;
-        indexTab = (indexTab + 1) % fenetreSize;
+        indexTab = (indexTab + 1) % fenetreSize; //index fenetre 
         return sent_size;
     }
     return -1;
