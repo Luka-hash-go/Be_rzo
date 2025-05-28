@@ -1,19 +1,35 @@
 #include <mictcp.h>
 #include <../include/api/mictcp_core.h>
 
+// Fenetre glissante
+#define fenetreSize 10
+uint8_t fenetre[fenetreSize];// 0 -> Echec, 1 -> Reussite. Par défaut tous les élements sont a 0. Cela permet de forcer les ré-envoie de paquet au début. Cependant,
+// le BE étant destiné a être envoyé un grand nombre de paquet, cela va se stabiliser seulement après quelques émissions.
+
+float tolerance = 0.8; // -> X% de réussite nécessaire
+uint8_t indexTab = 0;
+
 #define nbMaxSocket 10
 unsigned short port = 5000;
 mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 int seq_num_recv = 0;
 int seq_num_send = 0;
-int nb_envoyes = 0;
 int numero_paquet = 0;
+
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
  * Retourne le descripteur du socket ou bien -1 en cas d'erreurr
  */
+
+void afficherTab() {
+    printf("Tab : \n");
+    for (int i = 0; i < fenetreSize; i++) {
+        printf("%u, ", fenetre[i]);
+    }
+    printf("\n");
+}
 
 int mic_tcp_socket(start_mode sm) {
     mic_tcp_sock mon_socket;
@@ -38,8 +54,7 @@ int mic_tcp_socket(start_mode sm) {
     // Ajout du socket dans le tableau associé
     socketTab[mon_socket.fd] = mon_socket;
     nbSocket++;
-
-    set_loss_rate(0.5);
+    set_loss_rate(5);
 
     return mon_socket.fd; // Retourner l’identifiant du socket
 }
@@ -64,7 +79,7 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
-   
+
     socketTab[socketID].remote_addr = *addr;
     printf("Receive connect\n");
     socketTab[socketID].state = CONNECTED;
@@ -93,9 +108,11 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
  * Retourne la taille des données envoyées, et -1 en cas d'erreur
  */
 int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
+
     printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
     mic_tcp_sock sock = socketTab[mic_sock];
     int sent_size;
+    int nb_envoyes = 0;
 
     // Créer un mic_tcp_pdu
     mic_tcp_pdu pdu;
@@ -118,7 +135,6 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
             sent_size = IP_send(pdu, sock.remote_addr.ip_addr);
             printf("Envoi du paquet : %d, tentative n° : %d.\n", current_seq, nb_envoyes + 1);
             nb_envoyes++;
-
             mic_tcp_pdu ack_pdu;
             int timeout = 2000;
 
@@ -128,21 +144,44 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size) {
                 if (ack_pdu.header.ack == 1 && ack_pdu.header.ack_num == current_seq) {
                     printf("ACK reçu pour le paquet : %d\n", current_seq);
                     ack_recu = 1;
+                    if (nb_envoyes == 1)fenetre[indexTab] = 1;
                 } else {
                     printf("ACK incorrect reçu (ack_num: %d, attendu: %d)\n", ack_pdu.header.ack_num, current_seq);
+                    if (nb_envoyes == 1) {
+                        fenetre[indexTab] = 0;
+                    }
+
+                    // Deux echecs d'affilés
+                    int index_precedent = (indexTab - 1 + fenetreSize ) % fenetreSize;
+                    if (fenetre[index_precedent] == 0) {
+                        printf(" Deux echecs d'affilés, on renvoie...");
+                        continue;
+                    }
                 }
+                afficherTab();
             } else {
+                uint8_t somme = 0;
+                for (int i = 0; i < fenetreSize; i++) {
+                    somme += fenetre[i];
+                }
+                if (somme/fenetreSize >= tolerance) {
+                    ack_recu = 1;
+                    printf("On est sous la tolerence. Pas grave le paquet est négligé.");
+                    fenetre[indexTab] = 0;
+                    afficherTab();
+                    indexTab = (indexTab + 1) % fenetreSize;
+                    return 0;
+                }
                 printf("Timeout - Réémission nécessaire pour le paquet : %d\n", current_seq);
+                fenetre[indexTab] = 0;
             }
         }
-
         seq_num_send = (seq_num_send + 1) % 2;
+        indexTab = (indexTab + 1) % fenetreSize;
         return sent_size;
     }
     return -1;
 }
-
-
  /*
  * Permet à l’application réceptrice de réclamer la récupération d’une donnée
  * stockée dans les buffers de réception du socket
@@ -155,15 +194,10 @@ int mic_tcp_recv(int socket, char* mesg, int max_mesg_size) {
         fprintf(stderr, "[MIC-TCP] Erreur : buffer invalide dans recv\n");
         return -1;
     }
-
-    
     mic_tcp_payload payload;
     payload.data = mesg;
     payload.size = max_mesg_size;
     int effective_data_size = app_buffer_get(payload);
-
-   
-
     return effective_data_size;
 }
 
