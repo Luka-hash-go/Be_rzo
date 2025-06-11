@@ -88,6 +88,9 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
         printf("[MIC-TCP] Erreur : SYN non reçu\n");
         return -1;
     }
+    *addr =socketTab[socketID].remote_addr ;
+
+
 
     // 2. Envoyer SYN-ACK
     memset(&synack_pdu, 0, sizeof(mic_tcp_pdu));
