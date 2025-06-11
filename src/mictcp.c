@@ -97,7 +97,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     synack_pdu.header.dest_port = syn_pdu.header.source_port;
     synack_pdu.header.syn = 1;
     synack_pdu.header.ack = 1;
-    IP_send(synack_pdu, socketTab[socketID].remote_addr.ip_addr);
+    IP_send(synack_pdu, *addr.ip_addr);
 
     // 3. Attendre ACK
     if (IP_recv(&ack_pdu, &socketTab[socketID].local_addr.ip_addr, &socketTab[socketID].remote_addr.ip_addr, 2000) == -1 || ack_pdu.header.ack != 1) {
