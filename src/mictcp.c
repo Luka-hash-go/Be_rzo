@@ -87,6 +87,8 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
         printf("[MIC-TCP] Erreur : SYN non reçu\n");
         return -1;
     }
+    // maj  port du client pour la suite
+    socketTab[socketID].remote_addr.port = syn_pdu.header.source_port;
     
 
 
@@ -94,7 +96,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     // 2. Envoyer SYN-ACK
     memset(&synack_pdu, 0, sizeof(mic_tcp_pdu));
     synack_pdu.header.source_port = socketTab[socketID].local_addr.port;
-    synack_pdu.header.dest_port = syn_pdu.header.source_port;
+    synack_pdu.header.dest_port = socketTab[socketID].remote_addr.port;
     synack_pdu.header.syn = 1;
     synack_pdu.header.ack = 1;
     IP_send(synack_pdu, socketTab[socketID].remote_addr.ip_addr);
@@ -109,6 +111,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("Receive connect\n");
 
     socketTab[socketID].state = CONNECTED;
+    *addr = socketTab[socketID].remote_addr;
     return 0; // Connexion acceptée
 }
 /*
@@ -123,32 +126,35 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
         return -1; // :(
     }
 
-    mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
+    // envoie SYN
+    mic_tcp_pdu syn_pdu;
     memset(&syn_pdu, 0, sizeof(mic_tcp_pdu));
     syn_pdu.header.source_port = socketTab[socketID].local_addr.port;
-    syn_pdu.header.dest_port = socketTab[socketID].remote_addr.port;
+    syn_pdu.header.dest_port = addr.port;
     syn_pdu.header.syn = 1;
     syn_pdu.header.ack = 0;
-
-    // 1. Envoyer SYN
     IP_send(syn_pdu, addr.ip_addr);
+   
 
-    // 2. Attendre SYN-ACK
-     mic_tcp_ip_addr srv_ip_tmp;
-    if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr,&socketTab[socketID].remote_addr, 2000) == -1
+    // on attend SYN-ACK
+    mic_tcp_pdu synack_pdu;
+    mic_tcp_ip_addr srv_ip_tmp;
+    if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr,&srv_ip_tmp, 2000) == -1
         || synack_pdu.header.syn != 1 || synack_pdu.header.ack != 1) {
         printf("[MIC-TCP] Erreur : SYN-ACK non reçu ou incorrect\n");
         return -1;
     }
 
-      // Mettre à jour l'adresse IP du serveur pour la suite
+   //  maj de  l'adresse IP et port du serveur pour la suite
     socketTab[socketID].remote_addr = addr;
     socketTab[socketID].remote_addr.ip_addr = srv_ip_tmp;
-
-    // 3. Envoyer ACK
+    socketTab[socketID].remote_addr.port = synack_pdu.header.source_port; // port serveur
+   
+    // un ACK
+    mic_tcp_pdu ack_pdu;
     memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
     ack_pdu.header.source_port = socketTab[socketID].local_addr.port;
-    ack_pdu.header.dest_port = addr.port;
+    ack_pdu.header.dest_port = socketTab[socketID].remote_addr.port;
     ack_pdu.header.ack = 1;
     IP_send(ack_pdu, socketTab[socketID].remote_addr.ip_addr);
 
