@@ -83,7 +83,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
       mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
 
     // 1. Attendre SYN
-    if (IP_recv(&syn_pdu, &socketTab[socketID].local_addr.ip_addr, addr.ip_addr, 0) == -1 || syn_pdu.header.syn != 1) {
+    if (IP_recv(&syn_pdu, &socketTab[socketID].local_addr.ip_addr,  &socketTab[socketID].remote_addr.ip_addr, 0) == -1 || syn_pdu.header.syn != 1) {
         printf("[MIC-TCP] Erreur : SYN non reçu\n");
         return -1;
     }
@@ -293,7 +293,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     // Correction : traiter le PDU reçu selon le numéro de séquence attendu
 
-    /*if(pdu.header.syn == 1 && pdu.header.ack == 0){
+    /if(pdu.header.syn == 1 && pdu.header.ack == 0){
 
         mic_tcp_pdu SYNACK;
         SYNACK.header.source_port= pdu.header.source_port;
@@ -302,7 +302,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         SYNACK.header.ack = 1;
         SYNACK.payload.size = 8;
         IP_send(SYNACK,remote_addr);
-    }*/
+    }
     
     if (pdu.header.seq_num == seq_num_recv) {
         // Insertion des données utiles dans le buffer de réception
