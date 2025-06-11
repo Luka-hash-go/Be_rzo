@@ -96,7 +96,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     // 2. Envoyer SYN-ACK
     memset(&synack_pdu, 0, sizeof(mic_tcp_pdu));
     synack_pdu.header.source_port = socketTab[socketID].local_addr.port;
-    synack_pdu.header.dest_port = addr->port;
+    synack_pdu.header.dest_port = socketTab[socketID].remote_addr.port;
     synack_pdu.header.syn = 1;
     synack_pdu.header.ack = 1;
     IP_send(synack_pdu, socketTab[socketID].remote_addr.ip_addr);
