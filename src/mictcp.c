@@ -121,6 +121,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
 int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 
+    socketTab[socketID].remote_addr = addr;
 
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
@@ -292,7 +293,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
     // Correction : traiter le PDU reçu selon le numéro de séquence attendu
 
-    if(pdu.header.syn == 1 && pdu.header.ack == 0){
+    /*if(pdu.header.syn == 1 && pdu.header.ack == 0){
 
         mic_tcp_pdu SYNACK;
         SYNACK.header.source_port= pdu.header.source_port;
@@ -301,7 +302,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         SYNACK.header.ack = 1;
         SYNACK.payload.size = 8;
         IP_send(SYNACK,remote_addr);
-    }
+    }*/
     
     if (pdu.header.seq_num == seq_num_recv) {
         // Insertion des données utiles dans le buffer de réception
