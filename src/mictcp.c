@@ -6,7 +6,7 @@
 uint8_t fenetre[fenetreSize];// 0 -> Echec, 1 -> Reussite. Par défaut tous les élements sont a 0. Cela permet de forcer les ré-envoie de paquet au début. Cependant,
 // le BE étant destiné a être envoyé un grand nombre de paquet, cela va se stabiliser seulement après quelques émissions.
 
-float tolerance = 0.8; // -> X% de réussite nécessaire
+float tolerance = 0.0; // -> X% de réussite nécessaire
 uint8_t indexTab = 0;
 
 #define nbMaxSocket 10
@@ -17,6 +17,19 @@ int seq_num_recv = 0;
 int seq_num_send = 0;
 int numero_paquet = 0;
 
+mic_tcp_pdu SYN;
+SYN.header.syn = 1;
+SYN.header.ack = 0;
+
+
+mic_tcp_pdu SYNACK;
+SYNACK.header.syn = 1;
+SYNACK.header.ack = 1;
+
+
+mic_tcp_pdu ACK;
+ACK.header.syn=0;
+ACK.header.ack=1;
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -79,11 +92,15 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
-
     socketTab[socketID].remote_addr = *addr;
-    printf("Receive connect\n");
-    socketTab[socketID].state = CONNECTED;
+    if(IP_recv(SYN,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun synack envoyé");
+    seq_num_recv++
+    IP_send(SYNACK,socketTab[socketID].remote_addr);
+    if(IP_recv(ACK,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun ack envoyé");
 
+    printf("Receive connect\n");
+
+    socketTab[socketID].state = CONNECTED
     return 0; // Connexion acceptée
 }
 /*
@@ -93,14 +110,32 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
 int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 
+    tolerance
     // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
     socketTab[socketID].remote_addr = addr;
+    socketTab[socketID].local_addr;
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
 
-    socketTab[socketID].state = CONNECTED; // Set state after validation
+   
 
+    IP_send(SYN,socketTab[socketID].remote_addr);
+    seq_num_send ++;
+    // Ensuite, on attend la réponse du serveur
+    if(IP_recv(SYNACK,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun synack envoyé");
+    seq_num_send ++;
+    IP_send(ACK,socketTab[socketID].remote_addr);
+    seq_num_send ++;
+    if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
+        return -1; // :(
+    }
+
+
+    
+
+    socketTab[socketID].state = CONNECTED; // Set state after validation
+    tolerance = 0.8; // le client redefini le temps de tolérance
     return 0; // ca s'est bien passé ;)
 }
    /*
