@@ -1,5 +1,6 @@
 #include <mictcp.h>
 #include <../include/api/mictcp_core.h>
+#include <signal.h>
 
 // Fenetre glissante
 #define fenetreSize 10
@@ -17,19 +18,6 @@ int seq_num_recv = 0;
 int seq_num_send = 0;
 int numero_paquet = 0;
 
-mic_tcp_pdu SYN;
-SYN.header.syn = 1;
-SYN.header.ack = 0;
-
-
-mic_tcp_pdu SYNACK;
-SYNACK.header.syn = 1;
-SYNACK.header.ack = 1;
-
-
-mic_tcp_pdu ACK;
-ACK.header.syn=0;
-ACK.header.ack=1;
 
 /*
  * Permet de créer un socket entre l’application et MIC-TCP
@@ -91,16 +79,12 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
  */
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
-
     socketTab[socketID].remote_addr = *addr;
-    if(IP_recv(SYN,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun synack envoyé");
-    seq_num_recv++
-    IP_send(SYNACK,socketTab[socketID].remote_addr);
-    if(IP_recv(ACK,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun ack envoyé");
+    
 
     printf("Receive connect\n");
 
-    socketTab[socketID].state = CONNECTED
+    socketTab[socketID].state = CONNECTED;
     return 0; // Connexion acceptée
 }
 /*
@@ -110,23 +94,44 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
 int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     printf("[MIC-TCP] Appel de la fonction: ");  printf(__FUNCTION__); printf("\n");
 
-    tolerance
-    // Stocker l’adresse et le port de destination passés par addr dans la structure mictcp_socket correspondant au socket identifié par socket passé en paramètre.
+
     socketTab[socketID].remote_addr = addr;
     socketTab[socketID].local_addr;
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
+    mic_tcp_pdu SYN;
+    SYN.header.source_port= socketTab[socketID].local_addr.port;
+    SYN.header.dest_port =socketTab[socketID].remote_addr.port;
+    SYN.header.syn = 1;
+    SYN.header.ack = 0;
+    SYN.header.fin = 0;
+    SYN.payload.size = 8;
+    
+       
+    mic_tcp_pdu SYNACK;
+    SYNACK.header.source_port= socketTab[socketID].local_addr.port;
+    SYNACK.header.dest_port =socketTab[socketID].remote_addr.port;
+    SYNACK.header.syn = 1;
+    SYNACK.header.ack = 1;
+    SYNACK.header.fin = 0;
+    SYNACK.payload.size = 8;
+    
+    mic_tcp_pdu ACK;
+    ACK.header.source_port= socketTab[socketID].local_addr.port;
+    ACK.header.dest_port =socketTab[socketID].remote_addr.port;
+    ACK.header.syn = 0;
+    ACK.header.ack = 1;
+    ACK.header.fin = 0;
+    ACK.payload.size = 8;
+
 
    
 
-    IP_send(SYN,socketTab[socketID].remote_addr);
-    seq_num_send ++;
-    // Ensuite, on attend la réponse du serveur
-    if(IP_recv(SYNACK,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000));printf("erreur aucun synack envoyé");
-    seq_num_send ++;
-    IP_send(ACK,socketTab[socketID].remote_addr);
-    seq_num_send ++;
+    IP_send(SYN,socketTab[socketID].remote_addr.ip_addr);
+    //Ensuite, on attend la réponse du serveur
+    if(IP_recv(&SYNACK,&socketTab[socketID].local_addr,&socketTab[socketID].remote_addr,1000000));perror("erreur aucun synack envoyé");
+    IP_send(ACK,socketTab[socketID].remote_addr.ip_addr);
     if (socketTab[socketID].remote_addr.ip_addr.addr_size == 0) {
         return -1; // :(
     }
@@ -264,8 +269,20 @@ int mic_tcp_close (int socketID) {
  */
 void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr) {
     printf("[MIC-TCP] Appel de la fonction: %s\n", __FUNCTION__);
-
     // Correction : traiter le PDU reçu selon le numéro de séquence attendu
+
+    if(pdu.header.syn =1){
+
+        mic_tcp_pdu SYNACK;
+        SYNACK.header.source_port= pdu.header.source_port;
+        SYNACK.header.dest_port =pdu.header.dest_port;
+        SYNACK.header.syn = 1;
+        SYNACK.header.ack = 1;
+        SYNACK.header.fin = 0;
+        SYNACK.payload.size = 8;
+        IP_send(SYNACK,remote_addr);
+    }
+    
     if (pdu.header.seq_num == seq_num_recv) {
         // Insertion des données utiles dans le buffer de réception
         app_buffer_put(pdu.payload);
