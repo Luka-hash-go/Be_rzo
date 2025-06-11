@@ -83,7 +83,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
       mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
 
     // 1. Attendre SYN
-    if (IP_recv(&syn_pdu, &socketTab[socketID].local_addr.ip_addr, &socketTab[socketID].remote_addr.ip_addr, 0) == -1 || syn_pdu.header.syn != 1) {
+    if (IP_recv(&syn_pdu, &socketTab[socketID].local_addr.ip_addr, addr.ip_addr, 0) == -1 || syn_pdu.header.syn != 1) {
         printf("[MIC-TCP] Erreur : SYN non reçu\n");
         return -1;
     }
