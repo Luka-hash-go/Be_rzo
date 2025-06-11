@@ -163,7 +163,7 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     syn_pdu.header.syn = 1;
 
     // 1. Envoyer SYN
-    IP_send(syn_pdu, addr.ip_addr);
+    IP_send(syn_pdu, socketTab[socketID].remote_addr.ip_addr);
 
     // 2. Attendre SYN-ACK
     if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr, &socketTab[socketID].remote_addr.ip_addr, 2000) == -1
