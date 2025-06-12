@@ -101,6 +101,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
                 printf("[MIC-TCP] Erreur envoi SYN-ACK\n");
                 return -1;
             }
+            socketTab[socketID].state = WAITING_FOR_SYNACK;
             break;
 
         case WAITING_FOR_ACK:
