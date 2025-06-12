@@ -12,7 +12,7 @@
 // Fenetre glissante
 #define fenetreSize 10
 uint8_t fenetre[fenetreSize];// 0 -> Echec, 1 -> Reussite. Par défaut tous les élements sont a 0. Cela permet de forcer les ré-envoie de paquet au début. Cependant,
-// le BE étant destiné a être envoyé un grand nombre de paquet, cela va se stabiliser seulement après quelques émissions.
+// le BE étant destiné a être envoyé un grand nombre de paquet, cela va se stabiliser seulement après quelques émissions...
 uint8_t indexTab=0;
 float tolerance = 0.8; // -> X% de réussite nécessaire (sera négociéplus tard ;))
 pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER; // Pour la 4.2
