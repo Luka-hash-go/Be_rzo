@@ -79,44 +79,38 @@ int mic_tcp_bind(int socketID, mic_tcp_sock_addr addr) { // oblige en reception
  */
 int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
-    
+
       mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
 
-    // 1. Attendre SYN
-    if (IP_recv(&syn_pdu, &socketTab[socketID].local_addr.ip_addr, &(socketTab[socketID].remote_addr.ip_addr), 5000) == -1) {
-        printf("[MIC-TCP] Erreur : SYN non reçu\n");
-        return -1;
-    }
     // maj  port du client pour la suite
     socketTab[socketID].remote_addr.port = syn_pdu.header.source_port;
+
     *addr = socketTab[socketID].remote_addr; // on stocke addr du client
-    
 
+    switch (socketTab[socketID].state) {
+        // 1. Syn recu, on envoie un syn-ack
+        case SYN_RECEIVED:
+            memset(&synack_pdu, 0, sizeof(mic_tcp_pdu));
+            synack_pdu.header.source_port = socketTab[socketID].local_addr.port;
+            synack_pdu.header.dest_port = syn_pdu.header.source_port;
+            synack_pdu.header.syn = 1;
+            synack_pdu.header.ack = 1;
+            synack_pdu.header.ack_num = syn_pdu.header.seq_num + 1; // ACK du numéro SYN reçu
 
+            if (IP_send(synack_pdu, socketTab[socketID].remote_addr.ip_addr) == -1) {
+                printf("[MIC-TCP] Erreur envoi SYN-ACK\n");
+                return -1;
+            }
+            break;
 
-    // 2. Envoyer SYN-ACK
-    memset(&synack_pdu, 0, sizeof(mic_tcp_pdu));
-    synack_pdu.header.source_port = socketTab[socketID].local_addr.port;
-    synack_pdu.header.dest_port = syn_pdu.header.source_port;
-    synack_pdu.header.syn = 1;
-    synack_pdu.header.ack = 1;
-    synack_pdu.header.ack_num = syn_pdu.header.seq_num + 1; // ACK du numéro SYN reçu
-
-      if (IP_send(synack_pdu, socketTab[socketID].remote_addr.ip_addr) == -1) {
-        printf("[MIC-TCP] Erreur envoi SYN-ACK\n");
-        return -1;
+        case WAITING_FOR_ACK:
+            printf("Connection établie coté client !\n");
+            socketTab[socketID].state = CONNECTED;
+            break;
+        default:
+            perror("Erreur durant la connection !\n");
+            break;
     }
-
-    // 3. Attendre ACK
-    if (IP_recv(&ack_pdu, &socketTab[socketID].local_addr.ip_addr, &socketTab[socketID].remote_addr.ip_addr, 2000) == -1 || ack_pdu.header.ack != 1) {
-        printf("[MIC-TCP] Erreur : ACK non reçu\n");
-        return -1;
-    }
-    
-
-    printf("Receive connect\n");
-
-    socketTab[socketID].state = CONNECTED;
     return 0; // Connexion acceptée
 }
 /*
@@ -139,23 +133,23 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     syn_pdu.header.dest_port = addr.port;
     syn_pdu.header.syn = 1;
     syn_pdu.header.ack = 0;
-    
+
 
      if (IP_send(syn_pdu, addr.ip_addr) == -1) {
         printf("[MIC-TCP] Erreur envoi SYN\n");
         return -1;
     }
 
-   
+
 
     // on attend SYN-ACK
     mic_tcp_pdu synack_pdu;
-  
+
    if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr, &(socketTab[socketID].remote_addr.ip_addr), 5000) == -1) {
         printf("[MIC-TCP] SYN-ACK non reçu\n");
         return -1;
     }
-   
+
     // un ACK
     mic_tcp_pdu ack_pdu;
     memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
@@ -170,7 +164,7 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     }
 
 
-    
+
 
     socketTab[socketID].state = CONNECTED; // Set state after validation
     tolerance = 0.8; // le client redefini le temps de tolérance
@@ -314,7 +308,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         SYNACK.payload.size = 8;
         IP_send(SYNACK,remote_addr);
     }*/
-    
+
     if (pdu.header.seq_num == seq_num_recv) {
         // Insertion des données utiles dans le buffer de réception
         app_buffer_put(pdu.payload);

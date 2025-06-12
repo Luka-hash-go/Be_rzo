@@ -293,7 +293,7 @@ void* listening(void* arg)
 
     pthread_mutex_init(&lock, NULL);
 
-    printf("[MICTCP-CORE] Demarrage du thread de reception reseau...\n");
+    printf("[MICTCP-CORE] Démarrage du thread de reception reseau...\n");
 
     const int payload_size = 1500 - API_HD_Size;
     pdu_tmp.payload.size = payload_size;
