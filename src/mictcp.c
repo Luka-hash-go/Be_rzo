@@ -2,6 +2,13 @@
 #include <../include/api/mictcp_core.h>
 #include <pthread.h>
 
+
+
+/*
+
+
+*/
+
 // Fenetre glissante
 #define fenetreSize 10
 uint8_t fenetre[fenetreSize];// 0 -> Echec, 1 -> Reussite. Par défaut tous les élements sont a 0. Cela permet de forcer les ré-envoie de paquet au début. Cependant,
@@ -12,7 +19,6 @@ pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER; // Pour la 4.2
 pthread_cond_t  conn_cond   = PTHREAD_COND_INITIALIZER;   // Pour la 4.2 accept/connexion portection contre l'asynchronisme
 
 #define nbMaxSocket 10
-unsigned short port = 5000;
 mic_tcp_sock socketTab[nbMaxSocket];
 int nbSocket = 0; // Permet de stocker le nombre de soscket déjà existant
 int seq_num_recv = 0;
