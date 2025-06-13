@@ -116,6 +116,9 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     // Phase d'établissement de connexion (client)
     mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
     int timeout = 3000;
+    int success = 0; // patch pour erreur syn aleatoire 
+    int max_retries = 5; //arbitrairement avec le loss_rate
+    int retry = 0;  
 
     // Envoi SYN avec tolérance demandée dans le payload
     memset(&syn_pdu, 0, sizeof(mic_tcp_pdu));
