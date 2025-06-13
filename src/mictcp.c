@@ -92,6 +92,7 @@ int mic_tcp_accept(int socketID, mic_tcp_sock_addr* addr) {
     printf("[MIC-TCP] Appel de la fonction : %s\n", __FUNCTION__);
 
     pthread_mutex_lock(&buffer_mutex);
+    server_connection_established = 0; //  test patch 
     while (!server_connection_established) {
         pthread_cond_wait(&conn_cond, &buffer_mutex);
     }
@@ -306,7 +307,8 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_i
         last_client_addr.ip_addr = remote_addr;
         // On suppose que le port source du client est dans pdu.header.source_port
         last_client_addr.port = pdu.header.source_port;
-        pthread_cond_signal(&conn_cond);
+        // pthread_cond_signal(&conn_cond); patch test 
+        pthread_cond_broadcast(&conn_cond); // patch test
         pthread_mutex_unlock(&buffer_mutex);
         return;
     }
