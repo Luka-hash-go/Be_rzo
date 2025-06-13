@@ -67,6 +67,9 @@ Une tolérance (Par défaut : 80%) qui va représenter la quantité de perte aut
 
 De plus, il est impossible d'avoir deux pertes d'affilé sans retransmission. 
 
+#### Mise en place du seuil de tolerence
+Nous avons décidé que ce serait la source qui gérerait le seuil de tolerence. Ce dernier transmettrait ce seuil lors du premier Syn lors de l'établissement de connection.\
+Nous avons décidé cela étant donné que le puits se contente de recevoir les message et de les afficher. Ainsi dès lors qu'il y aura un problème de transfert (perte de paquet) ce sera à la source de décidé si le paquet doit être renvoyé ou non.
 
 ## Auteurs
 
