@@ -115,21 +115,32 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
 
     // Phase d'établissement de connexion (client)
     mic_tcp_pdu syn_pdu, synack_pdu, ack_pdu;
-    int timeout = 2000;
+    int timeout = 3000;
 
     // Envoi SYN avec tolérance demandée dans le payload
     memset(&syn_pdu, 0, sizeof(mic_tcp_pdu));
     syn_pdu.header.syn = 1;
-    syn_pdu.header.seq_num = 42; // arbitraire justifier une valeur dans le readme
+    syn_pdu.header.seq_num = 42; // arbitraire on aurait pu mettre ce que l'on veut cela permet d'eviter les paquets fantomes
     syn_pdu.payload.data = (char*)&tolerance; //on envoie dans le syn la tolerance
     syn_pdu.payload.size = sizeof(float);
-    IP_send(syn_pdu, addr.ip_addr);
+    while (retry < max_retries && !success) { // patch erreur connection
+        IP_send(syn_pdu, addr.ip_addr);
 
-    // Attente SYN-ACK
-    if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr, &addr.ip_addr, timeout) == -1 || synack_pdu.header.syn != 1 || synack_pdu.header.ack != 1) {
-        printf("Erreur : SYN-ACK non reçu\n");
-        return -1;
+        // Attente SYN-ACK
+        if (IP_recv(&synack_pdu, &socketTab[socketID].local_addr.ip_addr, &addr.ip_addr, timeout) == -1 || synack_pdu.header.syn != 1 || synack_pdu.header.ack != 1) {
+            printf("Erreur : SYN-ACK non reçu\n");
+            return -1;
+        }else {
+        printf("Tentative %d : SYN-ACK non reçu, on recommence...\n", retry+1);
+        retry++;
+        }
+        
+    
     }
+    //patch 
+    if (!success) {
+    printf("Erreur : SYN-ACK non reçu après %d tentatives\n", max_retries);
+    return -1;
 
     // Envoi ACK final
     memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
@@ -142,7 +153,7 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
         return -1; // :(
     }
 
-    socketTab[socketID].state = CONNECTED; // Set state after validation
+    socketTab[socketID].state = CONNECTED; // On met le socket à connecté 
 
     return 0; // ca s'est bien passé ;)
 }
