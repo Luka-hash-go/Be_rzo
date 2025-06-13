@@ -1,89 +1,74 @@
-# BE RESEAU
-## TPs BE Reseau - 3 MIC
 
-Les détails du sujet du BE est accessible depuis le cours "Programmation Système et Réseau" sur moodle.
+# TPs BE Reseau - 3 MIC E - BORE & VACCARO
 
+Voici le compte rendu de notre projet Be_rzo.
 
-## Contenu du dépôt « template » fourni
-Ce dépôt inclut le code source initial fourni pour démarrer le BE. Plus précisément : 
-  - README.md (ce fichier) qui notamment décrit la préparation de l’environnement de travail et le suivi des versions de votre travail; 
-  - tsock_texte et tsock_video : lanceurs pour les applications de test fournies. 
-  - dossier include : contenant les définitions des éléments fournis que vous aurez à manipuler dans le cadre du BE.
-  - dossier src : contenant l'implantation des éléments fournis et à compléter dans le cadre du BE.
-  - src/mictcp.c : fichier au sein duquel vous serez amenés à faire l'ensemble de vos contributions (hors bonus éventuels). 
+## Avancement
 
 
-## Création du dépôt mictcp 
-
-1. Création d’un compte git étudiant : Si vous ne disposez pas d’un compte git, connectez vous sur http://github.com/ et créez un compte par binôme. 
-
-2. Afin d’être capable de mettre à jour le code que vous aurez produit sur le dépôt central Github, il vous faudra créer un jeton d’accès qui jouera le rôle de mot de passe. Veuillez le sauvegarder, car il vous le sera demandé lors de l'accès au dépôt central. Pour ce faire, veuillez suivre les étapes décrites : https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
-
-3. Création d’un dépôt Etudiant sur GitHub pour le BE Reseau
-  
-   Créer une copie du dépôt template enseignant : https://github.com/rezo-insat/mictcp, en vous y rendant et en cliquant sur le bouton « use this template » situé dans le coin en haut, plutôt à droite de la page. Il est demandé de le choisir comme dépôt privé. Il est impératif pour les corrections que vous rajoutiez le compte : rezo-insat comme collaborateur afin de permettre à vos enseignants d'accéder à votre dépôt. Pour ce faire, sélectionner le bouton "settings" puis "collaborators" et rajouter comme utilisateur : rezo-insat. La marche à suivre est décrite ci-après : https://docs.github.com/en/organizations/managing-access-to-your-organizations-repositories/adding-outside-collaborators-to-repositories-in-your-organization
-
-
-4. Créer un clone local de votre dépôt Github, i.e. une copie locale du dépôt sur votre compte insa. 
-  
-    cliquer sur le bouton « code » de votre dépôt, copier l’URL qui permet de l’identifier. 
-	Ouvrir un terminal de votre machine. En vous plaçant dans le répertoire de travail de votre choix, taper depuis le terminal :
-
-        git clone <url de votre dépôt>
-
-    Vous avez désormais une copie locale de votre dépôt, que vous pouvez mettre à jour et modifier à volonté au gré de votre avancement sur les TPs. 
-
-5. Afin de nous permettre d’avoir accès à votre dépôt, merci de bien vouloir renseigner l'URL de votre dépôt sur le fichier accessible depuis le lien "fichier URLs dépôts étudiants" se trouvant sur moodle (au niveau de la section: BE Reseau).
-
-## Compilation du protocole mictcp et lancement des applications de test fournies
-
-Pour compiler mictcp et générer les exécutables des applications de test depuis le code source fourni, taper :
-
-    make
-
-Deux applicatoins de test sont fournies, tsock_texte et tsock_video, elles peuvent être lancées soit en mode puits, soit en mode source selon la syntaxe suivante:
-
-    Usage: ./tsock_texte [-p|-s destination] port
-    Usage: ./tsock_video [[-p|-s] [-t (tcp|mictcp)]
-
-Seul tsock_video permet d'utiliser, au choix, votre protocole mictcp ou une émulation du comportement de tcp sur un réseau avec pertes.
-
-## Suivi de versions de votre travail
-
-Vous pouvez travailler comme vous le souhaitez sur le contenu du répertoire local. Vous pouvez mettre à jour les fichiers existants, rajouter d’autres ainsi que des dossiers et en retirer certains à votre guise. 
-
-Pour répercuter les changements que vous faites sur votre répertoire de travail local sur le dépôt central GitHub, sur votre terminal, taper :
+ - [✅] - MICTCP-v1
+ - [✅] - MICTCP-v2
+ - [✅] - MICTCP-v3
+ - [✅] - MICTCP-v4.1/MICTCP-v4.2
  
-    git add .
-    git commit -m «un message décrivant la mise à jour»
-    git push
 
-- Marquage des versions successives de votre travail sur mictcp 
- 
-Lorsque vous le souhaitez, git permet d'associer une étiquette à un état précis de votre dépôt par l'intermédiaires de tags. Il vous est par exemple possible d'utiliser ce mécanisme pour marquer (et par conséquence pouvoir retrouver) l'état de votre dépôt pour chacune des versions successives de votre travail sur mictcp.
+## Principe
+Ce Be_rzo vient en complément du Bureau d'étude du premier semestre.\
+Le principe de ce BE est de (re)créer un mécanisme de communication (Texte / Vidéo) entre deux utilisateurs distincts.\
+Contrairement au précédent BE, ici nous allons non plus nous concentrer sur la communication Utilisateur/Programme mais bien Programme/Programme.
 
-Pour Créer un tag « v1 » et l'associer à l'état courrant de votre dépôt, vous taperez la commande suivante sur votre terminal :
+## Usage
+Communication textuel :
+```
+./tsock_texte [-p|-s destination] port
+```
+Communication visuel :
+```
+./tsock_video [-p|-s] [-t (tcp|mictcp)]
+```
 
-    git tag v1
+## Phase d'établissement de connection
+Durant la phase d'établissement, nous avons choisi de traiter les requêtes depuis la fonction :
+```
+void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_ip_addr local_addr, mic_tcp_ip_addr remote_addr)
+```
+Cela rend le programme beaucoup plus facile, et évite des saut de fonctions inutiles.\
+Durant cette phase de connection, nous avons opter pour un mécanisme "3-way Handshake" sans reprise de pertes.
 
-Pour lister les tags existants au sein de votre dépôt
+![Schéma de la méthode 3-way Handshake](assets/syn-synack-ack.jpg)
 
-    git tag -l
+## Transfert de message
+Une fois la phase de connection établie, la phase de transfert se déroule de la manière la plus simple possible :
+- La source envoie un message
+- Le puits reçoit le message et envoie un ack
+- La source reçoit un ack, et passe au message suivant.
 
-Pour transférer les tags de votre dépôt local vers le dépôt central sur github:
+Cependant dans certains cas, des pertes vont avoir lieu sur le canal de transmission.
 
-    git push origin --tags
+### Mécanisme de reprise des pertes et usage de la tolerance
+Nous avons plusieurs manières d'implémenter un mécanisme de reprise de perte.\
+Nous avons décider de choisir deux méthodes distinctes en fonction de l'usage (Texte ou Vidéo).
+
+#### Comment repérer une perte de transmission 
+Afin de repérer des possibles erreurs de transmission, nous allons utiliser le principe de numéro de séquence.\
+Le récepteur (Puits) et l'Envoyeur (Source) vont se sychroniser sur un numéro de séquence (par défaut : 0)\
+Ainsi à chaque message envoyé, le numéro de séquence va basculer entre 0 et 1. *(sequence_suivante = sequence_actuelle + 1 % 2)* \
+Ainsi si les numéros de séquence ne plus égaux, un paquet s'est égaré. 
+
+#### Usage textuel
+Dans cet usage, aucune perte n'est toléré. Il est impossible de maintenir une discussion avec une lettre sur 5 qui "disparait"
+
+#### Usage vidéo
+Dans cet usage, quelques pertes sont envisageable et ne generons en aucun cas l'expérience utilisateur, nous avons donc opté pour une reprise de pertes avec une fenêtre glissante.\
+Une tolérance (Par défaut : 80%) qui va représenter la quantité de perte autorisé sur une courte séquence (Par défaut : 10 paquets).\
+ *Par exemple :* 
+ -  *Les 9 derniers paquets ont été transmis avec réussite, si le 10ème paquet échoue et que la tolerance est de 80%, le paquet ne sera pas re-transmis*
+ - *Dans les 9 derniers paquets, 2 ont déjà échoué, si le 10ème paquet échoue et que la tolérence est de 80%, le paquet sera retransmis*
+
+De plus, il est impossible d'avoir deux pertes d'affilé sans retransmission. 
 
 
-Ceci permettra à votre enseignant de positionner le dépôt dans l'état ou il était au moment du marquage avec chacun des tags que vous définissez. 
-   
-## Suivi de votre avancement 
+## Auteurs
 
-Veuillez utiliser, à minima, un tag pour chacune des versions successives de mictcp qui sont définies au sein du sujet du BE disponible sous moodle.
-
-
-## Liens utiles 
-
-Aide pour la création d’un dépôt depuis un template : https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
-
-Manuel d'utilisation de git: https://git-scm.com/docs
+[Luka Boré](https://github.com/Luka-hash-go)\
+[Mathieu Vaccaro](https://github.com/mathieuvaccaro)
