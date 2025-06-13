@@ -141,6 +141,7 @@ int mic_tcp_connect (int socketID, mic_tcp_sock_addr addr) {
     if (!success) {
     printf("Erreur : SYN-ACK non reçu après %d tentatives\n", max_retries);
     return -1;
+    }
 
     // Envoi ACK final
     memset(&ack_pdu, 0, sizeof(mic_tcp_pdu));
